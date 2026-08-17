@@ -1,10 +1,10 @@
 {
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
-  "name": "Mintlify Starter Kit",
+  "name": "Leyyow Docs",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
+    "primary": "#9a3412",
+    "light": "#ea580c",
     "dark": "#15803D"
   },
   "favicon": "/favicon.svg",
@@ -68,5 +68,8 @@
       "github": "https://github.com/mintlify",
       "linkedin": "https://linkedin.com/company/mintlify"
     }
+  },
+  "markdown": {
+    "schema": true
   }
 }
