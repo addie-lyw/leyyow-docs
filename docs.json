@@ -3,9 +3,9 @@
   "theme": "aspen",
   "name": "Leyyow Docs",
   "colors": {
-    "primary": "#9a3412",
-    "light": "#ea580c",
-    "dark": "#15803D"
+    "primary": "#d69000",
+    "light": "#d69000",
+    "dark": "#d69000"
   },
   "favicon": "/favicon.svg",
   "navigation": {
@@ -71,5 +71,11 @@
   },
   "markdown": {
     "schema": true
+  },
+  "icons": {
+    "library": "lucide"
+  },
+  "background": {
+    "decoration": "grid"
   }
 }
