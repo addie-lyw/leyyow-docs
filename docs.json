@@ -46,14 +46,14 @@
         ]
       },
       {
-        "tab": "API Reference",
+        "tab": "Test Tab",
         "pages": [
           "untitled-page-2",
           "untitled-page-3"
         ]
       },
       {
-        "tab": "API Reference2",
+        "tab": "API Reference",
         "openapi": "openapi.yaml",
         "pages": [
           "untitled-page"
