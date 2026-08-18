@@ -48,13 +48,8 @@
       {
         "tab": "API Reference",
         "pages": [
-          {
-            "group": "Getting Started",
-            "pages": [
-              "index",
-              "quickstart"
-            ]
-          }
+          "untitled-page-2",
+          "untitled-page-3"
         ]
       },
       {
