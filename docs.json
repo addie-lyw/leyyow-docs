@@ -47,7 +47,22 @@
       },
       {
         "tab": "API Reference",
-        "openapi": "openapi.yaml"
+        "pages": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "index",
+              "quickstart"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference2",
+        "openapi": "openapi.yaml",
+        "pages": [
+          "untitled-page"
+        ]
       }
     ]
   },

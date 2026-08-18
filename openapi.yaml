@@ -58,9 +58,6 @@ servers:
   - url: https://api.leyyow.com
     description: Production — live merchant data
 
-security:
-  - bearerAuth: []
-
 tags:
   - name: Store
     description: Store profile, theme, categories, and fulfilment configuration.
