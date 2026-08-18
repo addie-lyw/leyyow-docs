@@ -31,7 +31,25 @@
           "icon": "newspaper"
         }
       ]
-    }
+    },
+    "tabs": [
+      {
+        "tab": "Guides",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "index",
+              "quickstart"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "openapi": "openapi.yaml"
+      }
+    ]
   },
   "logo": {
     "light": "/logo/light.svg",
@@ -79,5 +97,8 @@
   },
   "api": {
     "openapi": "openapi.yaml"
+  },
+  "appearance": {
+    "default": "dark"
   }
 }
