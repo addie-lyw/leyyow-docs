@@ -54,10 +54,7 @@
       },
       {
         "tab": "API Reference",
-        "openapi": "openapi.yaml",
-        "pages": [
-          "untitled-page"
-        ]
+        "openapi": "openapi.yaml"
       }
     ]
   },
