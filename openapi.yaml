@@ -1,0 +1,1009 @@
+openapi: 3.1.0
+
+info:
+  title: Leyyow Public Commerce API
+  version: 1.0.0
+  summary: Build a custom storefront on top of a Leyyow store.
+  description: |
+    The Public Commerce API lets a merchant's own website or application read their
+    Leyyow catalog, calculate delivery, create an order, and receive a Paystack
+    payment link.
+
+    ## Authentication
+
+    Every request requires an API key created in the Leyyow suite under
+    **Settings → Public API**, sent as a bearer token:
+
+    ```
+    Authorization: Bearer lyw_live_xxxxxxxxxxxxxxxx
+    ```
+
+    The key identifies exactly one store. Any product, variant, delivery option,
+    shipping quote, or order that does not belong to that store returns `404`,
+    regardless of whether the identifier exists elsewhere in Leyyow.
+
+    Keys used in browser code are visible to anyone who opens the network
+    inspector. Keep the key server-side where possible, and rotate it from the
+    suite if it is abused.
+
+    ## Response envelope
+
+    Every response — success or failure — uses the same envelope:
+
+    ```json
+    { "error": null, "message": "Products retrieved.", "data": {} }
+    ```
+
+    On success `error` is `null` and `data` carries the payload. On failure
+    `error` holds a human-readable reason, `data` is `null`, and the HTTP status
+    carries the machine-readable meaning.
+
+    ## Server-calculated amounts
+
+    Prices, taxes, delivery fees, and totals are calculated by Leyyow. Order
+    requests carry the customer's *choices* — variants, quantities, fulfilment
+    method — never amounts. Any amount submitted in a request body is ignored.
+
+    ## Rate limits
+
+    Order creation and shipping quotes are rate limited more strictly than
+    catalog reads. Exceeding a limit returns `429`.
+  contact:
+    name: Leyyow API support
+    email: support@leyyow.com
+
+servers:
+  - url: https://sandbox.api.leyyow.com
+    description: Sandbox — test keys, seeded data, no real orders
+  - url: https://api.leyyow.com
+    description: Production — live merchant data
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Store
+    description: Store profile, theme, categories, and fulfilment configuration.
+  - name: Products
+    description: Customer-facing catalog.
+  - name: Delivery
+    description: Fulfilment options and managed-delivery quotes.
+  - name: Orders
+    description: Order creation and status.
+
+paths:
+  /api/public/v1/store:
+    get:
+      operationId: getStore
+      summary: Retrieve store
+      tags: [Store]
+      description: |
+        Returns the store profile behind the API key: branding, contact details,
+        categories, tax configuration, and which fulfilment methods are enabled.
+
+        Read `delivery_enabled`, `manual_delivery_enabled`, and
+        `express_delivery_enabled` to decide which checkout options to render.
+        Pickup availability is expressed through `pickup_location` and
+        `pickup_schedules`.
+      responses:
+        '200':
+          description: Store retrieved.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Store'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /api/public/v1/products:
+    get:
+      operationId: listProducts
+      summary: List products
+      tags: [Products]
+      description: |
+        Returns active, storefront-visible products for the store, paginated.
+
+        Internal fields — cost price, reserved stock, reorder points, batch
+        numbers, expiry dates — are never included.
+      parameters:
+        - name: limit
+          in: query
+          description: Number of products per page.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          description: Number of products to skip.
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: search
+          in: query
+          description: Free-text match against product name and description.
+          schema:
+            type: string
+          example: ankara
+        - name: category
+          in: query
+          description: Category `uid` to filter by.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Products retrieved.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/PaginatedProducts'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /api/public/v1/products/{uid}:
+    get:
+      operationId: getProduct
+      summary: Retrieve product
+      tags: [Products]
+      description: |
+        Returns a single product with its variants, attributes, and images.
+
+        Returns `404` if the product is inactive, hidden from the storefront,
+        missing, or belongs to another store.
+      parameters:
+        - name: uid
+          in: path
+          required: true
+          description: Product `uid`.
+          schema:
+            type: string
+            format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+      responses:
+        '200':
+          description: Product retrieved.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Product'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /api/public/v1/delivery-options:
+    get:
+      operationId: listDeliveryOptions
+      summary: List delivery options
+      tags: [Delivery]
+      description: |
+        Returns the store's enabled Manual and Express Delivery options — named
+        locations with fixed fees set by the merchant.
+
+        Two fulfilment paths are *not* here. Pickup details live on the store
+        object. Managed Delivery (ShipBubble) has no fixed fee, so it is priced
+        per-request through `POST /api/public/v1/shipping-quotes`.
+
+        Pass the chosen option's `uid` as `manual_delivery_option` when creating
+        the order.
+      responses:
+        '200':
+          description: Delivery options retrieved.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/DeliveryOption'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /api/public/v1/shipping-quotes:
+    post:
+      operationId: createShippingQuote
+      summary: Request shipping quote
+      tags: [Delivery]
+      description: |
+        Prices Managed Delivery for a specific address and basket by querying
+        ShipBubble couriers.
+
+        Returns a `request_token` alongside the available couriers. To use a
+        quote, pass that token as `rate` and the full chosen `Courier` object as
+        `courier` when creating the order.
+
+        Tokens are short-lived and bound to the store, address, items, and rates
+        that produced them. An expired or mismatched token fails order creation
+        with `410`.
+
+        This endpoint calls a third party on every request and is rate limited
+        more tightly than catalog reads.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShippingQuoteRequest'
+      responses:
+        '200':
+          description: Quote retrieved.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/ShippingQuote'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /api/public/v1/orders:
+    post:
+      operationId: createOrder
+      summary: Create order
+      tags: [Orders]
+      description: |
+        Creates an order and returns a Paystack payment link. The order is saved
+        with source `storefront` and appears in the suite as **Website**.
+
+        Send the customer's choices only. Leyyow validates stock, then calculates
+        unit prices, tax, delivery fee, and total server-side.
+
+        ### Fulfilment field combinations
+
+        The delivery fields must be sent as a matching set:
+
+        | Customer choice | `fulfilment_method` | `delivery_method` | `manual_delivery_option` | `rate` | `courier` |
+        |---|---|---|---|---|---|
+        | Pickup | `pickup` | `null` | `null` | `""` | `{}` |
+        | Manual or Express | `delivery` | `manual` | option `uid` | `""` | `{}` |
+        | Managed (ShipBubble) | `delivery` | `shipbubble` | `null` | quote `request_token` | chosen `Courier` |
+
+        After payment, Paystack returns the customer to the Checkout Return URL
+        saved in the suite.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderRequest'
+            examples:
+              manualDelivery:
+                summary: Manual delivery
+                value:
+                  customer_name: Ada Okafor
+                  customer_email: ada@example.com
+                  customer_phone: '+2348012345678'
+                  items:
+                    - variant: 550e8400-e29b-41d4-a716-446655440000
+                      popup_inventory: null
+                      quantity: 2
+                      notes: ''
+                  delivery_address: 12 Example Street, Lagos
+                  delivery_method: manual
+                  fulfilment_method: delivery
+                  payment_source: paystack
+                  courier: {}
+                  rate: ''
+                  manual_delivery_option: 7bf56f3d-20c2-4a52-b5d2-a1a98610e79f
+              pickup:
+                summary: Pickup
+                value:
+                  customer_name: Ada Okafor
+                  customer_email: ada@example.com
+                  customer_phone: '+2348012345678'
+                  items:
+                    - variant: 550e8400-e29b-41d4-a716-446655440000
+                      popup_inventory: null
+                      quantity: 1
+                      notes: ''
+                  delivery_address: null
+                  delivery_method: null
+                  fulfilment_method: pickup
+                  payment_source: paystack
+                  courier: {}
+                  rate: ''
+                  manual_delivery_option: null
+      responses:
+        '201':
+          description: Order created.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/CreateOrderResult'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/StockConflict'
+        '410':
+          $ref: '#/components/responses/QuoteExpired'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /api/public/v1/orders/{order_number}:
+    get:
+      operationId: getOrder
+      summary: Retrieve order
+      tags: [Orders]
+      description: |
+        Returns the current state of an order, including `payment_status` and
+        `fulfilment_status`. Poll this after the customer returns from Paystack
+        to confirm payment.
+
+        Only orders belonging to the API key's store are retrievable.
+      parameters:
+        - name: order_number
+          in: path
+          required: true
+          description: Human-readable order number.
+          schema:
+            type: string
+          example: LYW-10482
+      responses:
+        '200':
+          description: Order retrieved.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Order'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        Store API key created in the Leyyow suite under Settings → Public API.
+        Sent as `Authorization: Bearer <key>`.
+
+  responses:
+    Unauthorized:
+      description: API key missing, malformed, or revoked.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: Invalid or revoked API key.
+            message: Authentication failed.
+            data: null
+    NotFound:
+      description: |
+        Record not found, or not owned by the store linked to this API key.
+        Identifiers from another store return `404` rather than `403`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: Product not found.
+            message: The requested resource does not exist.
+            data: null
+    ValidationError:
+      description: Required field missing or field value invalid.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: manual_delivery_option is required when delivery_method is manual.
+            message: Order could not be created.
+            data: null
+    StockConflict:
+      description: One or more items no longer have enough sellable stock.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: Insufficient sellable stock for one or more items.
+            message: Order could not be created.
+            data: null
+    QuoteExpired:
+      description: |
+        The shipping quote token has expired or does not match the submitted
+        address and items. Request a fresh quote.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: Shipping quote has expired.
+            message: Order could not be created.
+            data: null
+    RateLimited:
+      description: Too many requests. Retry after the window resets.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: Rate limit exceeded.
+            message: Too many requests.
+            data: null
+
+  schemas:
+
+    Envelope:
+      type: object
+      required: [error, message, data]
+      properties:
+        error:
+          type: [string, 'null']
+          description: Human-readable failure reason, or `null` on success.
+          examples: [null]
+        message:
+          type: string
+          description: Short status message.
+          examples: [Request successful.]
+        data:
+          description: Response payload. `null` on failure.
+
+    ErrorResponse:
+      type: object
+      required: [error, message, data]
+      properties:
+        error:
+          type: string
+          description: Human-readable failure reason.
+        message:
+          type: string
+        data:
+          type: 'null'
+
+    Money:
+      type: string
+      description: |
+        Decimal amount as a string, in the store's currency (NGN). Kept as a
+        string to avoid floating-point rounding. Example — `"45000.00"`.
+      examples: ['45000.00']
+
+    Store:
+      type: object
+      properties:
+        uid: { type: string, format: uuid }
+        slug: { type: string, examples: [ada-fabrics] }
+        store_uid: { type: string, format: uuid }
+        store_name: { type: string, examples: [Ada Fabrics] }
+        size_chart: { type: [string, 'null'] }
+        applied_theme:
+          type: object
+          properties:
+            uid: { type: string, format: uuid }
+            name: { type: string }
+            description: { type: string }
+            preview_image: { type: string, format: uri }
+            in_use: { type: boolean }
+        color_scheme:
+          type: object
+          properties:
+            primary: { type: string, examples: ['#1D9E75'] }
+            secondary: { type: string }
+            tertiary: { type: string }
+        typography: { type: string }
+        button: { type: string }
+        button_text_color: { type: string }
+        show_button_outline: { type: boolean }
+        footer_email: { type: string, format: email }
+        footer_phone: { type: string }
+        terms_and_conditions_url: { type: string }
+        instagram_url: { type: string }
+        facebook_url: { type: string }
+        x_url: { type: string }
+        tiktok_url: { type: string }
+        show_live_status_banner: { type: boolean }
+        logo: { type: string, format: uri }
+        favicon: { type: string, format: uri }
+        is_published: { type: boolean }
+        published_at: { type: [string, 'null'], format: date-time }
+        pickup_location:
+          type: [string, 'null']
+          description: Pickup address, or `null` if pickup is not offered.
+        pickup_schedules:
+          type: array
+          description: Per-weekday pickup windows.
+          items:
+            type: object
+            properties:
+              uid: { type: string, format: uuid }
+              day_of_week: { type: integer, minimum: 0, maximum: 6 }
+              day_of_week_display: { type: string, examples: [Monday] }
+              is_enabled: { type: boolean }
+              start_time: { type: [string, 'null'], examples: ['09:00:00'] }
+              end_time: { type: [string, 'null'], examples: ['17:00:00'] }
+              updated_at: { type: string, format: date-time }
+        delivery_enabled:
+          type: boolean
+          description: Managed Delivery (ShipBubble) is available.
+        manual_delivery_enabled: { type: boolean }
+        express_delivery_enabled: { type: boolean }
+        add_tax_to_product_price:
+          type: boolean
+          description: |
+            When `true`, displayed product prices already include tax. When
+            `false`, tax is added at checkout.
+        tax_collection_enabled: { type: boolean }
+        tax_rate: { type: string, examples: ['7.50'] }
+        sections:
+          type: array
+          description: Storefront layout sections.
+          items: { type: object, additionalProperties: true }
+        categories:
+          type: array
+          items:
+            type: object
+            properties:
+              uid: { type: string, format: uuid }
+              name: { type: string }
+              description: { type: string }
+              is_active: { type: boolean }
+              image: { type: [string, 'null'], format: uri }
+              created_at: { type: string, format: date-time }
+              updated_at: { type: string, format: date-time }
+        is_live: { type: boolean }
+        has_subscription: { type: boolean }
+        plan_name: { type: string }
+        custom_domain: { type: string }
+
+    PaginatedProducts:
+      type: object
+      properties:
+        count:
+          type: integer
+          description: Total products matching the query.
+          examples: [42]
+        next:
+          type: [string, 'null']
+          format: uri
+          description: URL of the next page, or `null` on the last page.
+        previous:
+          type: [string, 'null']
+          format: uri
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Product'
+
+    Product:
+      type: object
+      properties:
+        uid: { type: string, format: uuid }
+        name: { type: string, examples: [Ankara wrap dress] }
+        description: { type: string }
+        story: { type: string }
+        category: { type: string, format: uuid }
+        category_name: { type: string, examples: [Dresses] }
+        brand: { type: string }
+        is_active: { type: boolean }
+        is_hidden_from_storefront: { type: boolean }
+        is_variable:
+          type: boolean
+          description: |
+            `true` when the product has multiple selectable variants. When
+            `false`, use the variant flagged `is_default`.
+        variants:
+          type: array
+          items:
+            $ref: '#/components/schemas/Variant'
+        images:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductImage'
+        total_stock: { type: integer, examples: [24] }
+        created_at: { type: string, format: date-time }
+
+    Variant:
+      type: object
+      properties:
+        uid: { type: string, format: uuid }
+        name: { type: string, examples: [Medium / Blue] }
+        sku: { type: string }
+        price:
+          $ref: '#/components/schemas/Money'
+        promo_price:
+          oneOf:
+            - $ref: '#/components/schemas/Money'
+            - type: 'null'
+          description: Discounted price, or `null` when no promo is running.
+        promo_expiry: { type: [string, 'null'], format: date-time }
+        weight: { type: string, description: Kilograms., examples: ['0.50'] }
+        length: { type: string, description: Centimetres. }
+        width: { type: string }
+        height: { type: string }
+        is_active: { type: boolean }
+        image: { type: [string, 'null'], format: uri }
+        is_default: { type: boolean }
+        attributes:
+          type: array
+          items:
+            $ref: '#/components/schemas/Attribute'
+        available_stock:
+          type: integer
+          description: Physical stock on hand.
+        sellable_stock:
+          type: integer
+          description: |
+            Stock available to sell after reservations. This is the number to
+            validate quantity against.
+
+    Attribute:
+      type: object
+      properties:
+        uid: { type: string, format: uuid }
+        attribute: { type: string, format: uuid }
+        value: { type: string, format: uuid }
+        attribute_name: { type: string, examples: [Size] }
+        attribute_value: { type: string, examples: [Medium] }
+
+    ProductImage:
+      type: object
+      properties:
+        uid: { type: string, format: uuid }
+        image: { type: string, format: uri }
+        alt_text: { type: string }
+        is_primary: { type: boolean }
+        order: { type: integer }
+        sort_order: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    DeliveryOption:
+      type: object
+      properties:
+        uid:
+          type: string
+          format: uuid
+          description: Pass as `manual_delivery_option` when creating the order.
+        location: { type: string, examples: [Lagos Mainland] }
+        amount:
+          $ref: '#/components/schemas/Money'
+        delivery_type:
+          type: string
+          enum: [standard, express]
+        created_at: { type: string, format: date-time }
+
+    ShippingQuoteRequest:
+      type: object
+      required: [delivery_address, customer_name, customer_email, customer_phone, items]
+      properties:
+        delivery_address:
+          type: string
+          examples: [12 Example Street, Lagos]
+        customer_name: { type: string, examples: [Ada Okafor] }
+        customer_email: { type: string, format: email }
+        customer_phone: { type: string, examples: ['+2348012345678'] }
+        items:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [variant, quantity]
+            properties:
+              variant: { type: string, format: uuid }
+              quantity: { type: integer, minimum: 1 }
+        category:
+          type: [string, 'null']
+          description: ShipBubble package category. Send `null` to use the default.
+
+    ShippingQuote:
+      type: object
+      properties:
+        request_token:
+          type: string
+          description: |
+            Short-lived token identifying this quote. Pass as `rate` when
+            creating the order.
+        couriers:
+          type: array
+          items:
+            $ref: '#/components/schemas/Courier'
+        fastest_courier:
+          $ref: '#/components/schemas/Courier'
+        cheapest_courier:
+          $ref: '#/components/schemas/Courier'
+        checkout_data:
+          type: object
+          properties:
+            ship_from:
+              $ref: '#/components/schemas/ShipParty'
+            ship_to:
+              $ref: '#/components/schemas/ShipParty'
+            currency: { type: string, examples: [NGN] }
+            package_amount: { type: number }
+            package_weight: { type: number }
+            pickup_date: { type: string, format: date }
+            is_invoice_required: { type: boolean }
+            cod_policy: { type: string }
+
+    ShipParty:
+      type: object
+      properties:
+        name: { type: string }
+        phone: { type: string }
+        email: { type: string, format: email }
+        address: { type: string }
+
+    Courier:
+      type: object
+      description: |
+        A courier rate option. Send the entire object back as `courier` when
+        creating a ShipBubble order — do not reconstruct it field by field.
+      properties:
+        courier_id: { type: string }
+        courier_name: { type: string, examples: [GIG Logistics] }
+        courier_image: { type: string, format: uri }
+        service_code: { type: string }
+        insurance:
+          type: object
+          properties:
+            code: { type: string }
+            fee: { type: number }
+        discount:
+          type: object
+          properties:
+            percentage: { type: number }
+            symbol: { type: string }
+            discounted: { type: number }
+        service_type: { type: string }
+        waybill: { type: boolean }
+        on_demand: { type: boolean }
+        is_cod_available: { type: boolean }
+        tracking_level: { type: integer }
+        ratings: { type: number }
+        votes: { type: integer }
+        connected_account: { type: boolean }
+        rate_card_amount: { type: number }
+        rate_card_currency: { type: string }
+        pickup_eta: { type: string }
+        pickup_eta_time: { type: string }
+        dropoff_station:
+          oneOf:
+            - $ref: '#/components/schemas/Station'
+            - type: 'null'
+        pickup_station:
+          oneOf:
+            - $ref: '#/components/schemas/Station'
+            - type: 'null'
+        delivery_eta: { type: string }
+        delivery_eta_time: { type: string }
+        info: { type: [string, 'null'] }
+        currency: { type: string }
+        vat: { type: number }
+        total:
+          type: number
+          description: Total courier charge shown to the customer.
+        tracking:
+          type: object
+          properties:
+            bars: { type: integer }
+            label: { type: string }
+        sub_total: { type: number }
+        service_charge: { type: number }
+        total_amount: { type: number }
+
+    Station:
+      type: object
+      properties:
+        name: { type: string }
+        address: { type: string }
+        country: { type: string }
+        phone: { type: [string, 'null'] }
+
+    CreateOrderRequest:
+      type: object
+      required:
+        [customer_name, customer_email, customer_phone, items, fulfilment_method, payment_source]
+      properties:
+        customer_name: { type: string, examples: [Ada Okafor] }
+        customer_email: { type: string, format: email }
+        customer_phone: { type: string, examples: ['+2348012345678'] }
+        items:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [variant, quantity]
+            properties:
+              variant: { type: string, format: uuid }
+              popup_inventory:
+                type: [string, 'null']
+                description: Reserved. Send `null` — popup orders are out of scope in v1.
+              quantity: { type: integer, minimum: 1 }
+              notes: { type: string, description: Customer note for this line item. }
+        delivery_address:
+          type: [string, 'null']
+          description: Required when `fulfilment_method` is `delivery`.
+        delivery_method:
+          type: [string, 'null']
+          enum: [manual, shipbubble, null]
+          description: |
+            `manual` for Manual or Express Delivery, `shipbubble` for Managed
+            Delivery, `null` for pickup.
+        fulfilment_method:
+          type: string
+          enum: [pickup, delivery]
+        payment_source:
+          type: string
+          enum: [paystack]
+        courier:
+          type: object
+          additionalProperties: true
+          description: |
+            The full `Courier` object from the shipping quote. Send `{}` for
+            pickup and manual delivery.
+        rate:
+          type: string
+          description: |
+            The `request_token` from the shipping quote. Send `""` for pickup and
+            manual delivery.
+        manual_delivery_option:
+          type: [string, 'null']
+          format: uuid
+          description: |
+            `uid` of the chosen delivery option. Required when `delivery_method`
+            is `manual`, otherwise `null`.
+
+    CreateOrderResult:
+      type: object
+      properties:
+        order:
+          $ref: '#/components/schemas/Order'
+        payment:
+          type: object
+          properties:
+            payment_link:
+              type: string
+              format: uri
+              description: |
+                Paystack checkout URL. Redirect the customer here. Paystack
+                returns them to the Checkout Return URL configured in the suite.
+
+    Order:
+      type: object
+      properties:
+        uid: { type: string, format: uuid }
+        order_number: { type: string, examples: [LYW-10482] }
+        source:
+          type: string
+          const: storefront
+          description: Always `storefront` for API-created orders.
+        store: { type: string, format: uuid }
+        store_name: { type: string }
+        store_email: { type: string, format: email }
+        store_phone: { type: string }
+        logo: { type: string, format: uri }
+        location: { type: string, format: uuid }
+        location_name: { type: string }
+        customer: { type: string, format: uuid }
+        customer_name: { type: string }
+        customer_phone: { type: string }
+        customer_email: { type: string, format: email }
+        customer_address: { type: string }
+        user: { type: [string, 'null'] }
+        total_amount:
+          $ref: '#/components/schemas/Money'
+        subtotal:
+          $ref: '#/components/schemas/Money'
+        discount_amount:
+          $ref: '#/components/schemas/Money'
+        tax_amount:
+          $ref: '#/components/schemas/Money'
+        tax_rate_used: { type: string, examples: ['7.50'] }
+        total_paid: { type: number }
+        outstanding_balance: { type: number }
+        payment_status:
+          type: string
+          examples: [pending]
+        payment_status_display: { type: string, examples: [Pending] }
+        fulfilment_status: { type: string }
+        fulfilment_status_display: { type: string }
+        fulfilment_method:
+          type: string
+          enum: [pickup, delivery]
+        delivery_fee:
+          $ref: '#/components/schemas/Money'
+        manual_delivery_type: { type: [string, 'null'] }
+        delivery_address: { type: [string, 'null'] }
+        delivery_method: { type: [string, 'null'] }
+        courier: { type: object, additionalProperties: true }
+        rate: { type: string }
+        tracking_number: { type: string }
+        has_shipping: { type: boolean }
+        order_date: { type: [string, 'null'], format: date-time }
+        shipping_details:
+          type: [object, 'null']
+          additionalProperties: true
+        coupon:
+          type: [string, 'null']
+          description: Always `null` in v1 — coupons are out of scope.
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItem'
+        created_at: { type: string, format: date-time }
+
+    OrderItem:
+      type: object
+      properties:
+        uid: { type: string, format: uuid }
+        variant: { type: string, format: uuid }
+        variant_name: { type: string }
+        variant_sku: { type: string }
+        product_name: { type: string }
+        image: { type: string, format: uri }
+        popup_inventory: { type: [string, 'null'] }
+        quantity: { type: integer }
+        unit_price:
+          $ref: '#/components/schemas/Money'
+        total_price:
+          $ref: '#/components/schemas/Money'
+        fulfilment_status: { type: string }
+        qty_fulfilled: { type: integer }
+        notes: { type: string }
+        attributes:
+          type: array
+          items:
+            $ref: '#/components/schemas/Attribute'
+        product_images:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductImage'
