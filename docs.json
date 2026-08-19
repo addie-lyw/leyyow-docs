@@ -34,7 +34,7 @@
     },
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "API Reference",
         "groups": [
           {
             "group": "Getting Started",
@@ -42,12 +42,12 @@
               "index",
               "quickstart"
             ]
+          },
+          {
+            "group": "APIs",
+            "openapi": "openapi.yaml"
           }
         ]
-      },
-      {
-        "tab": "API Reference",
-        "openapi": "openapi.yaml"
       }
     ]
   },

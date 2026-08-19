@@ -3,22 +3,169 @@ title: "Introduction"
 mode: "center"
 ---
 
-Write a short description of your product here. What it does, who it's for, and what they can accomplish with it.
+The Leyyow API lets you build a custom shopping experience — your own website, mobile app, or any frontend — powered by the catalogue, pricing, delivery, and checkout infrastructure you already manage in your Leyyow suite.
 
-<Note>
-  Ready to make this your own? Start by editing this page. Update your `docs.json` file to customize your site. Then fill out the [Quickstart](/quickstart) page.
-</Note>
+Your store stays the single source of truth. Products, variants, stock levels, tax rules, and delivery options are managed in the suite. The API reads that data and creates orders against it, so nothing is duplicated and nothing drifts.
 
-<Card title="Quickstart" icon="rocket" href="/quickstart">
-  This card links to the quickstart page in your project.
-</Card>
+## What you can build
 
-<Card title="Components" icon="puzzle-piece" href="https://mintlify.com/docs/components">
-  Add cards, callouts, steps, tabs, and more to design and structure your pages.
-</Card>
+Any buying experience where a customer browses products and places an order:
 
-<Card title="Settings" icon="gear" href="https://mintlify.com/docs/organize/settings">
-  Set your site name, branding, and navigation in the `docs.json` file.
-</Card>
+- A branded website or landing page with its own design, outside of Leyyow's hosted storefront.
+- A mobile app that lets customers browse and buy.
+- An embedded checkout inside another platform — a blog, a link-in-bio page, a WhatsApp flow.
 
-/
+The API handles the commerce layer. You handle the interface.
+
+## How it works
+
+Every request is scoped to a single store via an API key created in **Settings → API** in your Leyyow suite. The key is sent as a bearer token:
+
+```bash
+Authorization: Bearer lyw_live_xxxxxxxxxxxxxxxx
+```
+
+The key identifies your store. Any resource that doesn't belong to that store returns `404` — the API never leaks data across stores.
+
+<Warning>
+  API keys carry full read and order-creation access to your store. Keep them server-side. If your storefront runs in the browser, proxy requests through your own backend so the key is never exposed to your customers.
+</Warning>
+
+## Response format
+
+Every response — success or failure — uses the same envelope:
+
+```json
+{
+  "error": null,
+  "message": "Products retrieved.",
+  "data": { ... }
+}
+```
+
+On success, `error` is `null` and `data` carries the payload. On failure, `error` holds a human-readable reason, `data` is `null`, and the HTTP status code carries the machine-readable meaning.
+
+| Status | Meaning |
+| --- | --- |
+| `200` | Success |
+| `201` | Created |
+| `400` | Validation error — missing or invalid field |
+| `401` | API key missing, malformed, or revoked |
+| `404` | Resource not found or not owned by your store |
+| `409` | Insufficient stock |
+| `410` | Shipping quote expired |
+| `429` | Rate limited — retry later |
+
+## Server-calculated amounts
+
+You never send prices or totals. Order requests carry the customer's choices — which variants, how many, which delivery method — and Leyyow calculates unit prices, tax, delivery fees, and the total server-side. Any amount submitted in a request body is ignored.
+
+---
+
+## Explore the docs
+
+Get up and running in three simple steps.
+
+<CardGroup cols={2}>
+  <Card title="Getting started" href="/quickstart" img="/images/getting-started.png">
+    Four steps from a fresh store to your first order.
+  </Card>
+
+  <Card title="Authentication" href="/authentication" img="/images/authentication.png">
+    How your API key authorises every request.
+  </Card>
+
+  <Card title="Errors" href="/errors" img="/images/errors.png">
+    The response envelope and status codes.
+  </Card>
+
+  <Card title="Catalogue to checkout" href="/catalogue-to-checkout" img="/images/catalogue-to-checkout.png">
+    A complete flow, endpoint by endpoint.
+  </Card>
+</CardGroup>
+
+## The API Flow
+
+See how the Leyyow API connects each part of the shopping experience.
+
+<Steps>
+  <Step title="Explore the catalogue" stepNumber={1} titleSize="h3">
+    Retrieve order details
+
+    <Columns cols={3}>
+      <Column>
+        <Callout iconType="brands">
+          **Store**
+
+          Get store information
+
+          `/store`
+        </Callout>
+      </Column>
+      <Column>
+        <Callout iconType="brands">
+          **Store**
+
+          Get all products
+
+          `/products`
+        </Callout>
+      </Column>
+      <Column>
+        <Callout iconType="brands">
+          **Product**
+
+          Get product details
+
+          `/products/{id}`
+        </Callout>
+      </Column>
+    </Columns>
+  </Step>
+  <Step title="Prepare the delivery" stepNumber={2} titleSize="h3">
+    <Columns cols={2}>
+      <Column>
+        <Callout iconType="brands">
+          **Delivery Options**
+
+          Get available delivery options
+
+          `/delivery-options`
+        </Callout>
+      </Column>
+      <Column>
+        <Callout iconType="brands">
+          **Shipping Quotes**
+
+          Calculate shipping costs
+
+          `/shipping-quotes`
+        </Callout>
+      </Column>
+    </Columns>
+  </Step>
+  <Step title="Complete the order" stepNumber={3} titleSize="h3">
+    <Columns cols={2}>
+      <Column>
+        <Callout iconType="brands">
+          **Create Order**
+
+          Submit a new order
+
+          `/orders`
+        </Callout>
+      </Column>
+      <Column>
+        <Callout iconType="brands">
+          **Order**
+
+          Retrieve order details
+
+          `/orders/:id`
+        </Callout>
+      </Column>
+      <Column>
+      </Column>
+    </Columns>
+  </Step>
+</Steps>
