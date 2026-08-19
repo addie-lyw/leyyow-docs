@@ -45,13 +45,13 @@
     "links": [
       {
         "label": "Support",
-        "href": "mailto:hi@mintlify.com"
+        "href": "mailto:support@leyyow.com"
       }
     ],
     "primary": {
       "type": "button",
-      "label": "Dashboard",
-      "href": "https://app.mintlify.com"
+      "label": "Go to Suite",
+      "href": "https://suite.leyyow.com"
     }
   },
   "footer": {
@@ -74,5 +74,17 @@
   },
   "appearance": {
     "default": "dark"
+  },
+  "thumbnails": {
+    "appearance": "light"
+  },
+  "contextual": {
+    "options": [
+      "view",
+      "claude",
+      "chatgpt",
+      "download-spec"
+    ],
+    "display": "toc"
   }
 }
