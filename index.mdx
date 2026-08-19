@@ -66,23 +66,31 @@ You never send prices or totals. Order requests carry the customer's choices —
 
 Get up and running in three simple steps.
 
-<CardGroup cols={2}>
-  <Card title="Getting started" href="/quickstart" img="/images/getting-started.png">
-    Four steps from a fresh store to your first order.
-  </Card>
+<Columns cols={2}>
+  <Column>
+    <Card title="Getting started" type="info" icon="play" href="/quickstart">
+      Four steps from a fresh store to your first order
+    </Card>
+  </Column>
+  <Column>
+    <Card title="Authentication" type="info" icon="lock">
+      How your API key authorises every request
+    </Card>
+  </Column>
+</Columns>
 
-  <Card title="Authentication" href="/authentication" img="/images/authentication.png">
-    How your API key authorises every request.
-  </Card>
-
-  <Card title="Errors" href="/errors" img="/images/errors.png">
-    The response envelope and status codes.
-  </Card>
-
-  <Card title="Catalogue to checkout" href="/catalogue-to-checkout" img="/images/catalogue-to-checkout.png">
-    A complete flow, endpoint by endpoint.
-  </Card>
-</CardGroup>
+<Columns cols={2}>
+  <Column>
+    <Card title="Getting started" type="info" icon="warning">
+      Four steps from a fresh store to your first order
+    </Card>
+  </Column>
+  <Column>
+    <Card title="Authentication" type="info" icon="book-open">
+      How your API key authorises every request
+    </Card>
+  </Column>
+</Columns>
 
 ## The API Flow
 
