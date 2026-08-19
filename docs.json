@@ -67,7 +67,7 @@
     "library": "fontawesome"
   },
   "background": {
-    "decoration": "grid"
+    "decoration": "windows"
   },
   "api": {
     "openapi": "openapi.yaml"
