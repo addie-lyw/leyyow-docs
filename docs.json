@@ -46,13 +46,6 @@
         ]
       },
       {
-        "tab": "Test Tab",
-        "pages": [
-          "untitled-page-2",
-          "untitled-page-3"
-        ]
-      },
-      {
         "tab": "API Reference",
         "openapi": "openapi.yaml"
       }
